@@ -119,6 +119,9 @@ public class PlanController {
             if (!Objects.equals(plan.getObjectId(), updatePlanId)) {
                 return new ResponseEntity<>("Plan id cannot change: " + objectId, HttpStatus.CONFLICT);
             }
+            if (!Objects.equals(plan.getPlanCostShares().getObjectId(), jsonNode.get("planCostShares").get("objectId").asText())) {
+                return new ResponseEntity<>("objectId cannot change: " + objectId, HttpStatus.CONFLICT);
+            }
 
             // ETag-based conditional update check
             ResponseEntity<String> PRECONDITION_FAILED = checkIfMatch(ifMatch, plan);
@@ -154,24 +157,6 @@ public class PlanController {
         }
     }
 
-
-    // response body is stored using the Plan POJO defined
-    // all fields in the json request body will be converted to the correct mapping
-//    @PostMapping("/validatedPost")
-//    public ResponseEntity<?> createValidatedPlan(@RequestBody Plan plan) {
-//        try {
-//            log.info(plan.getObjectId());
-//            jsonSchemaValidator.validatePlan(plan);
-//
-//            planRepository.savePlan(plan);
-//            return new ResponseEntity<>("Plan is valid and saved!", HttpStatus.CREATED);
-//
-//        }
-//        catch (Exception e) {
-//            return new ResponseEntity<>("Invalid JSON: " + e.getMessage(), HttpStatus.BAD_REQUEST);
-//        }
-//    }
-
     @GetMapping("/")
     public String index() {
         return "Greetings from Spring Boot!";
@@ -200,10 +185,10 @@ public class PlanController {
             ResponseEntity<String> PRECONDITION_FAILED = checkIfMatch(ifMatch, plan);
             if (PRECONDITION_FAILED != null) return PRECONDITION_FAILED;
             planRepository.deletePlan(objectId);
-            return new ResponseEntity<>("Plan with id " + objectId + " deleted succesfully!", HttpStatus.NO_CONTENT);
+            return new ResponseEntity<>("Plan with id " + objectId + " deleted successfully!", HttpStatus.NO_CONTENT);
         }
         else {
-            return new ResponseEntity<>("Plan with id " + objectId + " not found!", HttpStatus.CONFLICT);
+            return new ResponseEntity<>("Plan with id " + objectId + " not found!", HttpStatus.NOT_FOUND);
         }
     }
 
