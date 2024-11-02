@@ -13,15 +13,21 @@ This project demonstrates the development of a REST API that supports Create, Re
 
 ---
 
+## Pre-requites:
+create a .env files and configure your Google CLient_ID and Client_Secret as
+GOOGLE_CLIENT_ID={}
+GOOGLE_CLIENT_SECRET={}
+
 ## Requirements:
 1. **Structured Data Handling (JSON):**
    - Support for handling any structured JSON data model.
    - Specifies URIs, status codes, headers, data models, and versioning.
 
-2. **CRD Operations:**
+2. **CRUD Operations:**
    - **POST:** For storing data.
    - **GET:** For retrieving data.
    - **DELETE:** For deleting data by unique ID.
+   - **PATCH:** For updating data.
 
 3. **Validation Support:**
    - Validation of incoming payloads using JSON schema.
@@ -41,5 +47,6 @@ This project demonstrates the development of a REST API that supports Create, Re
 - **POST /api/v1/plans:** Accepts structured JSON payloads and stores them in Redis.
 - **GET /api/v1/plans/{id}:** Retrieves data from Redis using a unique identifier.
 - **DELETE /api/v1/plans/{id}:** Deletes data from Redis using a unique identifier.
+- **PATCH /api/v1/plans/{id}:** Updates data on Redis using a unique identifier.
 
 ---
