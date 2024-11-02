@@ -8,6 +8,7 @@ import com.info7255.springdataredis.entity.PlanService;
 import com.info7255.springdataredis.repository.PlanRepository;
 import com.info7255.springdataredis.util.JsonSchemaValidator;
 import jakarta.annotation.Nullable;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,7 +45,10 @@ public class PlanController {
                 ObjectMapper objectMapper = new ObjectMapper();
                 Plan plan = objectMapper.treeToValue(jsonNode, Plan.class);
                 planRepository.savePlan(plan);
-                return new ResponseEntity<>("Plan is valid and saved!", HttpStatus.CREATED);
+                String eTag = getEtag(plan);
+                return ResponseEntity.status(HttpStatus.CREATED)
+                        .header("ETag", eTag)
+                        .body("Plan is valid and saved!");
             }
             else{
                 return new ResponseEntity<>("Plan already exists!", HttpStatus.CONFLICT);
@@ -84,8 +88,9 @@ public class PlanController {
             ObjectMapper objectMapper = new ObjectMapper();
             Plan newPlan = objectMapper.treeToValue(jsonNode, Plan.class);
             planRepository.savePlan(newPlan);
-            return new ResponseEntity<>("Plan is valid and saved!", HttpStatus.CREATED);
-
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .header("ETag", getEtag(newPlan))
+                    .body("Plan updated!");
         }
         catch (Exception e) {
             return new ResponseEntity<>("Invalid JSON: " + e.getMessage(), HttpStatus.BAD_REQUEST);
@@ -141,8 +146,9 @@ public class PlanController {
 
             Plan updatedPlan = objectMapper.readerForUpdating(plan).readValue(jsonNodeWithoutArray.toString(), Plan.class);
             planRepository.savePlan(updatedPlan);
-            return new ResponseEntity<>("Plan updated!", HttpStatus.OK);
-
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .header("ETag", getEtag(updatedPlan))
+                    .body("Plan updated!");
         } catch (Exception e) {
             return new ResponseEntity<>("Invalid JSON: " + e.getMessage(), HttpStatus.BAD_REQUEST);
         }
@@ -179,8 +185,7 @@ public class PlanController {
         }
 
 //        Implement conditional GET (If-None-Match with ETag support)
-        String hash = Integer.toString(plan.hashCode());
-        String eTag = "W/\"" + hash + "\"";
+        String eTag = getEtag(plan);
         if (ifNoneMatch != null && ifNoneMatch.equals(eTag)) {
             return new ResponseEntity<>(HttpStatus.NOT_MODIFIED);
         }
@@ -205,11 +210,16 @@ public class PlanController {
     @Nullable
     private static ResponseEntity<String> checkIfMatch(String ifMatch, Plan plan) {
         // ETag-based conditional update check
-        String hash = Integer.toString(plan.hashCode());
-        String eTag = "W/\"" + hash + "\"";
+        String eTag = getEtag(plan);
         if (ifMatch == null || !ifMatch.equals(eTag)) {
             return new ResponseEntity<>("Precondition failed", HttpStatus.PRECONDITION_FAILED);
         }
         return null;
+    }
+
+    @NotNull
+    private static String getEtag(Plan plan) {
+        String hash = Integer.toString(plan.hashCode());
+        return "W/\"" + hash + "\"";
     }
 }
