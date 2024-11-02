@@ -6,6 +6,7 @@ import org.everit.json.schema.Schema;
 import org.everit.json.schema.loader.SchemaLoader;
 import org.json.JSONObject;
 import org.json.JSONTokener;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
@@ -20,9 +21,28 @@ public class JsonSchemaValidator {
     private final Schema schema;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    enum SchemaType {
+            DEMO1,
+            DEMO2
+    }
+
     public JsonSchemaValidator() throws Exception {
         // Load JSON Schema from file (located in src/main/resources)
-        InputStream schemaStream = new ClassPathResource("plan-schema.json").getInputStream();
+        InputStream schemaStream = new ClassPathResource("plan-schema-demo2.json").getInputStream();
+        JSONObject jsonSchema = new JSONObject(new JSONTokener(schemaStream));
+        this.schema = SchemaLoader.load(jsonSchema);
+    }
+
+    public JsonSchemaValidator(@Value("${schema.type}") String enumType) throws Exception {
+        SchemaType schemaType = SchemaType.valueOf(enumType.toUpperCase());
+
+        InputStream schemaStream = switch (schemaType) {
+            case DEMO1 -> new ClassPathResource("plan-schema-demo1.json").getInputStream();
+            case DEMO2 -> new ClassPathResource("plan-schema-demo2.json").getInputStream();
+            default -> throw new IllegalArgumentException("Invalid schema type: " + enumType);
+        };
+
+        // Load the JSON schema from the selected file
         JSONObject jsonSchema = new JSONObject(new JSONTokener(schemaStream));
         this.schema = SchemaLoader.load(jsonSchema);
     }
