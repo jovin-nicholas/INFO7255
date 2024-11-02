@@ -1,5 +1,6 @@
 package com.info7255.springdataredis.entity;
 
+import jakarta.annotation.Nullable;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,6 +19,9 @@ public class Plan {
     private String _org;
     private String objectId;
     private String objectType;
-    private String planType;
+//    @Nullable
+//    private String planType;
+    @Nullable
+    private String planStatus;
     private String creationDate;
 }
