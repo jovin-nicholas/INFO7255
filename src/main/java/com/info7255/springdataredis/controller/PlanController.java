@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.info7255.springdataredis.entity.Plan;
 import com.info7255.springdataredis.entity.PlanService;
-import com.info7255.springdataredis.repository.PlanRepository;
+import com.info7255.springdataredis.repository.PlanRepService;
 import com.info7255.springdataredis.util.JsonSchemaValidator;
 import jakarta.annotation.Nullable;
 import org.jetbrains.annotations.NotNull;
@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.logging.Logger;
 
 /**
@@ -26,7 +27,7 @@ import java.util.logging.Logger;
 @RequestMapping("/api/v1/plans")
 public class PlanController {
     @Autowired
-    private PlanRepository planRepository;
+    private PlanRepService planService;
     private final JsonSchemaValidator jsonSchemaValidator;
     Logger log = Logger.getLogger(PlanController.class.getName());
 
@@ -34,6 +35,13 @@ public class PlanController {
         this.jsonSchemaValidator = jsonSchemaValidator;
     }
 
+    // Test endpoint
+    @GetMapping("/")
+    public String index() {
+        return "Greetings from Spring Boot!";
+    }
+
+    // Create a new plan
     @PostMapping("/")
     public ResponseEntity<?> createPlan(@RequestBody JsonNode jsonNode) {
         try {
@@ -41,10 +49,12 @@ public class PlanController {
             jsonSchemaValidator.validate(jsonNode);
 
             String planId = jsonNode.get("objectId").asText();
-            if(planRepository.findById(planId)==null) {
+            if(planService.findById(planId)==null) {
+                // Convert JSON to Plan object
                 ObjectMapper objectMapper = new ObjectMapper();
                 Plan plan = objectMapper.treeToValue(jsonNode, Plan.class);
-                planRepository.savePlan(plan);
+                planService.savePlan(plan);
+                // Return ETag in response header
                 String eTag = getEtag(plan);
                 return ResponseEntity.status(HttpStatus.CREATED)
                         .header("ETag", eTag)
@@ -59,16 +69,18 @@ public class PlanController {
         }
     }
 
+    // Update a plan
     @PutMapping ("/{objectId}")
     public ResponseEntity<?> updatePlan(
             @PathVariable String objectId,
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
             @RequestBody JsonNode jsonNode) {
         try {
-            Plan plan = planRepository.findById(objectId);
+            Plan plan = planService.findById(objectId);
 
             // Validate incoming JSON
             jsonSchemaValidator.validate(jsonNode);
+            String updatePlanId = jsonNode.get("objectId").asText();
 
             // Check if the plan exists
             if (plan == null) {
@@ -76,7 +88,6 @@ public class PlanController {
             }
 
             // Ensure the objectId cannot be changed
-            String updatePlanId = jsonNode.get("objectId").asText();
             if (!Objects.equals(plan.getObjectId(), updatePlanId)) {
                 return new ResponseEntity<>("Plan id cannot change: " + objectId, HttpStatus.CONFLICT);
             }
@@ -87,7 +98,7 @@ public class PlanController {
 
             ObjectMapper objectMapper = new ObjectMapper();
             Plan newPlan = objectMapper.treeToValue(jsonNode, Plan.class);
-            planRepository.savePlan(newPlan);
+            planService.savePlan(newPlan);
             return ResponseEntity.status(HttpStatus.CREATED)
                     .header("ETag", getEtag(newPlan))
                     .body("Plan updated!");
@@ -97,6 +108,7 @@ public class PlanController {
         }
     }
 
+    // Patch a plan
     @PatchMapping("/{objectId}")
     public ResponseEntity<?> patchPlan(
             @PathVariable String objectId,
@@ -104,7 +116,7 @@ public class PlanController {
             @RequestBody JsonNode jsonNode) {
         try {
             // Find the existing plan by ID
-            Plan plan = planRepository.findById(objectId);
+            Plan plan = planService.findById(objectId);
 
             // Validate incoming JSON
             jsonSchemaValidator.validate(jsonNode);
@@ -148,7 +160,7 @@ public class PlanController {
             jsonNodeWithoutArray.remove("linkedPlanServices"); // Remove array fields to avoid overwriting
 
             Plan updatedPlan = objectMapper.readerForUpdating(plan).readValue(jsonNodeWithoutArray.toString(), Plan.class);
-            planRepository.savePlan(updatedPlan);
+            planService.savePlan(updatedPlan);
             return ResponseEntity.status(HttpStatus.CREATED)
                     .header("ETag", getEtag(updatedPlan))
                     .body("Plan updated!");
@@ -157,14 +169,28 @@ public class PlanController {
         }
     }
 
-    @GetMapping("/")
-    public String index() {
-        return "Greetings from Spring Boot!";
+    // Get plan by id from Elasticsearch
+    @GetMapping("/search/{objectId}")
+    public ResponseEntity<Plan> searchPlan(@PathVariable String objectId, @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) {
+        Optional<Plan> planOptional = planService.searchById(objectId);
+        if (planOptional.isEmpty()) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+        Plan plan = planOptional.get();
+
+//        Implement conditional GET (If-None-Match with ETag support)
+        String eTag = getEtag(plan);
+        if (ifNoneMatch != null && ifNoneMatch.equals(eTag)) {
+            return new ResponseEntity<>(HttpStatus.NOT_MODIFIED);
+        }
+
+        return ResponseEntity.ok().eTag(eTag).body(plan);
     }
 
+    // Get plan by id from Redis
     @GetMapping("/{objectId}")
     public ResponseEntity<Plan> getPlan(@PathVariable String objectId, @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) {
-        Plan plan = planRepository.findById(objectId);
+        Plan plan = planService.findById(objectId);
         if (plan == null) {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
@@ -178,13 +204,14 @@ public class PlanController {
         return ResponseEntity.ok().eTag(eTag).body(plan);
     }
 
+    // Delete a plan from Redis and Elasticsearch
     @DeleteMapping("/{objectId}")
     public ResponseEntity<?> deletePlan(@PathVariable String objectId, @RequestHeader(value = "If-Match", required = false) String ifMatch){
-        if(planRepository.findById(objectId)!=null){
-            Plan plan = planRepository.findById(objectId);
+        if(planService.findById(objectId)!=null){
+            Plan plan = planService.findById(objectId);
             ResponseEntity<String> PRECONDITION_FAILED = checkIfMatch(ifMatch, plan);
             if (PRECONDITION_FAILED != null) return PRECONDITION_FAILED;
-            planRepository.deletePlan(objectId);
+            planService.deletePlan(objectId);
             return new ResponseEntity<>("Plan with id " + objectId + " deleted successfully!", HttpStatus.NO_CONTENT);
         }
         else {
@@ -192,6 +219,13 @@ public class PlanController {
         }
     }
 
+    // Search all plans from Elasticsearch
+    @GetMapping("/search")
+    public Iterable<Plan> searchAll() {
+        return planService.searchAll();
+    }
+
+    // Check if the ETag matches the plan
     @Nullable
     private static ResponseEntity<String> checkIfMatch(String ifMatch, Plan plan) {
         // ETag-based conditional update check
@@ -202,6 +236,7 @@ public class PlanController {
         return null;
     }
 
+    // Generate ETag for a plan
     @NotNull
     private static String getEtag(Plan plan) {
         String hash = Integer.toString(plan.hashCode());
